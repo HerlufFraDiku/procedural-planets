@@ -18,6 +18,9 @@ fn main() {
         .add_startup_system(setup)
         .add_system(make_planet_face_meshes)
         .add_system(increment_resolution)
+        .add_system(increment_roughness)
+        .add_system(toggle_wireframe)
+        .add_system(move_center)
         .add_system(orbit_camera::pan_orbit_camera)
         .run();
 }
@@ -46,8 +49,11 @@ fn setup(
                 transform: Transform::from_xyz(0.0, 0.0, 0.0),
                 ..Default::default()
             })
-            .insert(Wireframe)
-            .insert(planet::PlanetFace::new(2, direction));
+            .insert(planet::PlanetFace {
+                direction,
+                resolution: 18,
+                ..Default::default()
+            });
     }
 
     //light
@@ -65,9 +71,73 @@ fn setup(
 }
 
 pub fn increment_resolution(mut query: Query<&mut planet::PlanetFace>, keys: Res<Input<KeyCode>>) {
-    if keys.just_pressed(KeyCode::Space) {
+    if keys.just_pressed(KeyCode::R) {
         for mut face in query.iter_mut() {
             face.resolution += 1;
+        }
+    }
+    if keys.just_pressed(KeyCode::F) {
+        for mut face in query.iter_mut() {
+            face.resolution -= 1;
+        }
+    }
+}
+
+#[derive(Default)]
+struct ToggleState {
+    is_wireframe: bool,
+}
+
+fn toggle_wireframe(
+    mut commands: Commands,
+    query: Query<Entity, With<planet::PlanetFace>>,
+    keys: Res<Input<KeyCode>>,
+    mut toggle_state: Local<ToggleState>,
+) {
+    if keys.just_pressed(KeyCode::Space) {
+        for entt in query.iter() {
+            if toggle_state.is_wireframe {
+                commands.entity(entt).remove::<Wireframe>();
+            } else {
+                commands.entity(entt).insert(Wireframe);
+            }
+            toggle_state.is_wireframe = !toggle_state.is_wireframe;
+        }
+    }
+}
+
+pub fn increment_roughness(mut query: Query<&mut planet::PlanetFace>, keys: Res<Input<KeyCode>>) {
+    if keys.just_pressed(KeyCode::T) {
+        for mut face in query.iter_mut() {
+            face.noise_roughness += 0.1;
+        }
+    }
+    if keys.just_pressed(KeyCode::G) {
+        for mut face in query.iter_mut() {
+            face.noise_roughness -= 0.1;
+        }
+    }
+}
+
+pub fn move_center(mut query: Query<&mut planet::PlanetFace>, keys: Res<Input<KeyCode>>) {
+    if keys.just_pressed(KeyCode::Left) {
+        for mut face in query.iter_mut() {
+            face.noise_center -= Vec3::X * 0.1;
+        }
+    }
+    if keys.just_pressed(KeyCode::Right) {
+        for mut face in query.iter_mut() {
+            face.noise_center += Vec3::X * 0.1;
+        }
+    }
+    if keys.just_pressed(KeyCode::Up) {
+        for mut face in query.iter_mut() {
+            face.noise_center += Vec3::Y * 0.1;
+        }
+    }
+    if keys.just_pressed(KeyCode::Down) {
+        for mut face in query.iter_mut() {
+            face.noise_center -= Vec3::Y * 0.1;
         }
     }
 }
