@@ -6,27 +6,46 @@ use noise::{NoiseFn, SuperSimplex};
 pub struct PlanetFace {
     pub resolution: usize,
     pub direction: Vec3,
-    pub noise_center: Vec3,
-    pub noise_roughness: f32,
     pub scale: f32,
+    pub noise_center: Vec3,
+    pub noise_strength: f32,
+    pub noise_roughness: f32,
+    pub noise_layers: usize,
+    pub noise_persistance: f32,
+    pub noise_base_roughness: f32,
 }
 
 impl Default for PlanetFace {
     fn default() -> Self {
         Self {
-            resolution: 12,
+            resolution: 20,
             direction: Vec3::Y,
+            scale: 1.75,
             noise_center: Vec3::ZERO,
-            noise_roughness: 1.0,
-            scale: 1.0,
+            noise_strength: 0.51,
+            noise_roughness: 2.31,
+            noise_base_roughness: 0.91,
+            noise_persistance: 0.55,
+            noise_layers: 5,
         }
     }
 }
 
-fn evaluate_with_noise(point: Vec3) -> Vec3 {
-    let perlin = SuperSimplex::new();
-    let elevation = (perlin.get([point.x as f64, point.y as f64, point.z as f64]) + 1.0) * 0.5;
-    point * (1.0 + elevation) as f32
+fn evaluate_with_noise(face: &PlanetFace, point: Vec3) -> Vec3 {
+    let noise = SuperSimplex::new();
+    let mut noise_value = 0.0;
+    let mut frequency = face.noise_base_roughness;
+    let mut amplitude: f32 = 1.0;
+
+    for _ in 0..face.noise_layers {
+        let p = point * frequency + face.noise_center;
+        let v = noise.get([p.x as f64, p.y as f64, p.z as f64]);
+        noise_value += (v + 1.0) * 0.5 * amplitude as f64;
+        frequency *= face.noise_roughness;
+        amplitude *= face.noise_persistance;
+    }
+    let elevation = noise_value as f32 * face.noise_strength;
+    point * (1.0 + elevation)
 }
 
 fn recompute_face_mesh(mesh: &mut Mesh, face: &PlanetFace) {
@@ -50,12 +69,11 @@ fn recompute_face_mesh(mesh: &mut Mesh, face: &PlanetFace) {
             let point_on_unit_cube = face.direction
                 + (percent.x - 0.5) * 2.0 * axis_a
                 + (percent.y - 0.5) * 2.0 * axis_b;
-            let mut point_on_unit_sphere =
-                point_on_unit_cube.normalize() * face.noise_roughness + face.noise_center;
-            point_on_unit_sphere = evaluate_with_noise(point_on_unit_sphere);
-            point_on_unit_sphere *= face.scale;
+            let point_on_unit_sphere =
+                evaluate_with_noise(&face, point_on_unit_cube.normalize()) * face.scale;
             positions.push(point_on_unit_sphere.to_array());
 
+            // Add zero normal to be updated later
             normals.push(Vec3::ZERO);
 
             // generate index
